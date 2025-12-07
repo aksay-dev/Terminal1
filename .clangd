@@ -1,0 +1,14 @@
+CompileFlags:
+    Remove: [-f*, -m*]
+    Add: 
+      - -I${workspaceFolder}/main
+      - -I${workspaceFolder}/build/config
+      - -DIDF_VER=\"v5.5.1\"
+      - -DESP_PLATFORM
+      - -DESP_IDF_VERSION_MAJOR=5
+      - -DESP_IDF_VERSION_MINOR=5
+      - -DESP_IDF_VERSION_PATCH=1
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  

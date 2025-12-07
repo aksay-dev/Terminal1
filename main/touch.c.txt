@@ -1,0 +1,106 @@
+#include "driver/i2c.h"
+#include "esp_lcd_touch_gt911.h"
+#include "esp_lcd_touch.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "touch.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define TOUCH_SCL_GPIO 45
+#define TOUCH_SDA_GPIO 19
+#define TOUCH_INT_GPIO -1
+#define TOUCH_RST_GPIO -1
+
+static const char *TAG = "touch";
+
+static esp_lcd_touch_handle_t s_touch = NULL;
+
+static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    uint16_t touch_x[1], touch_y[1];
+    uint8_t touch_cnt = 0;
+    bool pressed = false;
+
+    esp_lcd_touch_read_data(s_touch);
+    pressed = esp_lcd_touch_get_coordinates(s_touch, touch_x, touch_y, NULL, &touch_cnt, 1);
+
+    if (pressed && touch_cnt > 0) {
+        data->state = LV_INDEV_STATE_PRESSED;
+        data->point.x = touch_x[0];
+        data->point.y = touch_y[0];
+        ESP_LOGD(TAG, "touch: %u,%u", (unsigned)touch_x[0], (unsigned)touch_y[0]);
+    } else {
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
+}
+
+void touch_init(void)
+{
+    esp_err_t err;
+
+    /* Пауза после подачи питания для RC‑сброса GT911 */
+    vTaskDelay(pdMS_TO_TICKS(300));
+
+    esp_lcd_panel_io_i2c_config_t io_conf = (esp_lcd_panel_io_i2c_config_t){
+        .dev_addr = 0x5D,
+        .control_phase_bytes = 1,
+        .dc_bit_offset = 0,
+        .lcd_cmd_bits = 8,
+        .lcd_param_bits = 8,
+        .flags = {
+            .disable_control_phase = 1,
+        },
+    };
+
+    esp_lcd_panel_io_handle_t io_handle = NULL;
+    /* I2C master init (старый драйвер) */
+    i2c_config_t i2c_conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = TOUCH_SDA_GPIO,
+        .scl_io_num = TOUCH_SCL_GPIO,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = 100000,
+    };
+    ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &i2c_conf));
+    ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
+
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(I2C_NUM_0, &io_conf, &io_handle));
+
+    const esp_lcd_touch_config_t touch_cfg = {
+        .x_max = 480,
+        .y_max = 480,
+        .rst_gpio_num = TOUCH_RST_GPIO,
+        .int_gpio_num = TOUCH_INT_GPIO,
+        .levels = {
+            .reset = 0,
+            .interrupt = 0,
+        },
+        .flags = {
+            .swap_xy = 1,
+            .mirror_x = 0,
+            .mirror_y = 0,
+        },
+    };
+    err = esp_lcd_touch_new_i2c_gt911(io_handle, &touch_cfg, &s_touch);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "GT911 init at 0x5D failed (%d), trying 0x14", (int)err);
+        /* recreate IO with alternative address 0x14 */
+        esp_lcd_panel_io_del(io_handle);
+        io_conf.dev_addr = 0x14;
+        ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(I2C_NUM_0, &io_conf, &io_handle));
+        ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt911(io_handle, &touch_cfg, &s_touch));
+    }
+}
+
+lv_indev_t *touch_create_lvgl_indev(void)
+{
+    lv_indev_t *indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev, lvgl_touch_read_cb);
+    return indev;
+}
+
+

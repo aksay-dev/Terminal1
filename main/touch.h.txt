@@ -1,0 +1,11 @@
+#pragma once
+
+#include "lvgl.h"
+
+/* Инициализация GT911 по I2C и привязка к LVGL */
+void touch_init(void);
+
+/* Создать LVGL input device (указатель) для тача */
+lv_indev_t *touch_create_lvgl_indev(void);
+
+
