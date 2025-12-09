@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_err.h"
@@ -8,6 +9,8 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_rgb.h"
 #include "esp_lcd_panel_io.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "display.h"
 
 /* Пины из Arduino-проекта */
@@ -87,19 +90,23 @@ static void st7701_init_sequence(void)
 {
     st7701_gpio_init();
 
+    /* Software reset для надежного старта после снятия питания */
+    st7701_cmd(0x01);              /* SWRESET */
+    ets_delay_us(150 * 1000);      /* 150 мс ожидание */
+
+    /* Полная init-последовательность st7701_type1 из Arduino_GFX (под 480x480) */
+
     // Page 0
     st7701_cmd(0xFF); st7701_data(0x77); st7701_data(0x01); st7701_data(0x00); st7701_data(0x00); st7701_data(0x10);
     st7701_cmd(0xC0); st7701_data(0x3B); st7701_data(0x00);
     st7701_cmd(0xC1); st7701_data(0x0D); st7701_data(0x02);
     st7701_cmd(0xC2); st7701_data(0x31); st7701_data(0x05);
-    st7701_cmd(0xCD); st7701_data(0x00);
+    st7701_cmd(0xCD); st7701_data(0x08);
 
     // Gamma
-    st7701_cmd(0xB0);
-    uint8_t b0[] = {0x00,0x11,0x18,0x0E,0x11,0x06,0x07,0x08,0x07,0x22,0x04,0x12,0x0F,0xAA,0x31,0x18};
+    st7701_cmd(0xB0); uint8_t b0[] = {0x00,0x11,0x18,0x0E,0x11,0x06,0x07,0x08,0x07,0x22,0x04,0x12,0x0F,0xAA,0x31,0x18};
     for (int i=0;i<16;i++) st7701_data(b0[i]);
-    st7701_cmd(0xB1);
-    uint8_t b1[] = {0x00,0x11,0x19,0x0E,0x12,0x07,0x08,0x08,0x08,0x22,0x04,0x11,0x11,0xA9,0x32,0x18};
+    st7701_cmd(0xB1); uint8_t b1[] = {0x00,0x11,0x19,0x0E,0x12,0x07,0x08,0x08,0x08,0x22,0x04,0x11,0x11,0xA9,0x32,0x18};
     for (int i=0;i<16;i++) st7701_data(b1[i]);
 
     // Page 1
@@ -130,36 +137,36 @@ static void st7701_init_sequence(void)
     st7701_cmd(0xEB); uint8_t eb[] = {0x02,0x00,0xE4,0xE4,0x88,0x00,0x40};
     for (int i=0;i<7;i++) st7701_data(eb[i]);
     st7701_cmd(0xEC); st7701_data(0x3C); st7701_data(0x00);
+    st7701_cmd(0xED); uint8_t ed[] = {0xAB,0x89,0x76,0x54,0x02,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x20,0x45,0x67,0x98,0xBA};
+    for (int i=0;i<16;i++) st7701_data(ed[i]);
 
     // VAP/VAN
     st7701_cmd(0xFF); st7701_data(0x77); st7701_data(0x01); st7701_data(0x00); st7701_data(0x00); st7701_data(0x13);
     st7701_cmd(0xE5); st7701_data(0xE4);
-
-    // Back to page 0 and set pixel format RGB565 (без изменения порядка RGB/BGR)
     st7701_cmd(0xFF); st7701_data(0x77); st7701_data(0x01); st7701_data(0x00); st7701_data(0x00); st7701_data(0x00);
-    st7701_cmd(0x3A); st7701_data(0x50);
-    
-    // MADCTL: попробуем разные варианты
-    // st7701_cmd(0x36); st7701_data(0x08); // BGR
-    // st7701_cmd(0x36); st7701_data(0x00); // RGB (по умолчанию)
+    st7701_cmd(0x3A); st7701_data(0x50); /* RGB565 */
+
+    // Back to page 0 and set pixel/scan order (как в Arduino init)
+    // st7701_cmd(0x21);             /* IPS on (disabled for now) */
+    // st7701_cmd(0x36); st7701_data(0x00); /* MADCTL RGB (disabled) */
 
     ets_delay_us(10*1000);
     st7701_cmd(0x11); // Sleep Out
     ets_delay_us(120*1000);
     st7701_cmd(0x29); // Display On
-    ets_delay_us(20*1000);
+    ets_delay_us(120*1000);
 }
 
 #define LCD_H_RES            480
 #define LCD_V_RES            480
 
-/* Тайминги из скетча - увеличены порчи */
+/* Тайминги из скетча (Arduino) */
 #define HSYNC_FRONT_PORCH    10
 #define HSYNC_PULSE_WIDTH    8
 #define HSYNC_BACK_PORCH     50
-#define VSYNC_FRONT_PORCH    8
+#define VSYNC_FRONT_PORCH    10
 #define VSYNC_PULSE_WIDTH    8
-#define VSYNC_BACK_PORCH     22
+#define VSYNC_BACK_PORCH     20
 #define PCLK_HZ              (10 * 1000 * 1000)
 
 /* LVGL таймер период (мс) */
@@ -168,12 +175,25 @@ static void st7701_init_sequence(void)
 static lv_display_t *s_lv_display = NULL;
 static esp_lcd_panel_handle_t s_rgb_panel = NULL;
 static esp_timer_handle_t s_lvgl_tick_timer = NULL;
+static TaskHandle_t s_lvgl_task_handle = NULL;
 static bool s_bl_inited = false;
 
 static void lvgl_tick_cb(void *arg)
 {
     (void)arg;
     lv_tick_inc(LVGL_TICK_MS);
+}
+
+/* Отдельная задача для обработки LVGL таймеров */
+static void lvgl_timer_task(void *arg)
+{
+    (void)arg;
+    /* Даем время на полную инициализацию дисплея и LVGL */
+    vTaskDelay(pdMS_TO_TICKS(200));
+    while (1) {
+        lv_timer_handler();
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
 }
 
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
@@ -229,16 +249,17 @@ void display_init(void)
             .vsync_pulse_width = VSYNC_PULSE_WIDTH,
             .vsync_back_porch = VSYNC_BACK_PORCH,
             .flags = {
-                .pclk_active_neg = false,
-                .hsync_idle_low = false,   /* Попробуем инвертировать HSYNC */
-                .vsync_idle_low = false,   /* И VSYNC тоже */
-                .de_idle_high = false,     /* И DE тоже */
+                .pclk_active_neg = false,  /* активен по положительному фронту */
+                .hsync_idle_low = false,
+                .vsync_idle_low = false,
+                .de_idle_high = false,
             },
         },
         .flags = {
             .fb_in_psram = true,   // AAA
             .disp_active_low = false,
         },
+        /* Порядок B-G-R для RGB565 (меняем местами R и B) */
         .data_gpio_nums = {
             LCD_B0_GPIO, /* D0  */
             LCD_B1_GPIO, /* D1  */
@@ -272,6 +293,9 @@ void display_init(void)
     if (!buf1) {
         buf1 = heap_caps_malloc(buf_pixels * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }
+    if (buf1) {
+        memset(buf1, 0, buf_pixels * sizeof(lv_color_t)); /* Очистка буфера */
+    }
 
     lv_init();
     s_lv_display = lv_display_create(LCD_H_RES, LCD_V_RES);
@@ -290,6 +314,11 @@ void display_init(void)
     };
     ESP_ERROR_CHECK(esp_timer_create(&tick_args, &s_lvgl_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(s_lvgl_tick_timer, LVGL_TICK_MS * 1000));
+
+    /* Задача для lv_timer_handler (чтобы не переполнять стек esp_timer) */
+    if (xTaskCreatePinnedToCore(lvgl_timer_task, "lvgl_task", 8192, NULL, 5, &s_lvgl_task_handle, 1) != pdPASS) {
+        ESP_LOGE("LVGL", "Failed to create lvgl_task");
+    }
 }
 
 void display_set_brightness(uint8_t percent)
