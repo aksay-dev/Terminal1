@@ -101,7 +101,7 @@ static void st7701_init_sequence(void)
     st7701_cmd(0xC0); st7701_data(0x3B); st7701_data(0x00);
     st7701_cmd(0xC1); st7701_data(0x0D); st7701_data(0x02);
     st7701_cmd(0xC2); st7701_data(0x31); st7701_data(0x05);
-    st7701_cmd(0xCD); st7701_data(0x08);
+    st7701_cmd(0xCD); st7701_data(0x00); /* вернуть как в рабочем init */
 
     // Gamma
     st7701_cmd(0xB0); uint8_t b0[] = {0x00,0x11,0x18,0x0E,0x11,0x06,0x07,0x08,0x07,0x22,0x04,0x12,0x0F,0xAA,0x31,0x18};
@@ -144,11 +144,11 @@ static void st7701_init_sequence(void)
     st7701_cmd(0xFF); st7701_data(0x77); st7701_data(0x01); st7701_data(0x00); st7701_data(0x00); st7701_data(0x13);
     st7701_cmd(0xE5); st7701_data(0xE4);
     st7701_cmd(0xFF); st7701_data(0x77); st7701_data(0x01); st7701_data(0x00); st7701_data(0x00); st7701_data(0x00);
-    st7701_cmd(0x3A); st7701_data(0x50); /* RGB565 */
+    st7701_cmd(0x3A); st7701_data(0x60); /* RGB666 */
 
     // Back to page 0 and set pixel/scan order (как в Arduino init)
     // st7701_cmd(0x21);             /* IPS on (disabled for now) */
-    // st7701_cmd(0x36); st7701_data(0x00); /* MADCTL RGB (disabled) */
+    st7701_cmd(0x36); st7701_data(0x00); /* MADCTL BGR (как в Arduino: _bgr ? 0x00 : 0x08) */
 
     ets_delay_us(10*1000);
     st7701_cmd(0x11); // Sleep Out
@@ -259,7 +259,7 @@ void display_init(void)
             .fb_in_psram = true,   // AAA
             .disp_active_low = false,
         },
-        /* Порядок B-G-R для RGB565 (меняем местами R и B) */
+        /* Порядок B-G-R для правильных цветов (D0..D15 = B0..B4,G0..G5,R0..R4) */
         .data_gpio_nums = {
             LCD_B0_GPIO, /* D0  */
             LCD_B1_GPIO, /* D1  */
@@ -302,7 +302,7 @@ void display_init(void)
     lv_display_set_color_format(s_lv_display, LV_COLOR_FORMAT_RGB565);
     lv_display_set_flush_cb(s_lv_display, lvgl_flush_cb);
     lv_display_set_buffers(s_lv_display, buf1, NULL, buf_pixels * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_FULL);
-    // lv_display_set_antialiasing(s_lv_display, false);
+    lv_display_set_antialiasing(s_lv_display, false); /* выключаем сглаживание текста/линий для максимальной резкости */
     ESP_LOGI("LVGL", "lv_color_t = %d bytes", (int)sizeof(lv_color_t));
 
     /* Тикер LVGL */
