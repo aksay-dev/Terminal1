@@ -11,20 +11,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* GT911 Configuration - как в Arduino проекте */
+/* GT911 Configuration - пины из Arduino-примера */
 #define TOUCH_GT911_SDA     19
 #define TOUCH_GT911_SCL     45
-#define TOUCH_GT911_INT     -1  /* Not used */
-#define TOUCH_GT911_RST     -1  /* Not used */
+#define TOUCH_GT911_INT     -1  /* Не используем IRQ */
+#define TOUCH_GT911_RST     -1  /* Не используем аппаратный сброс */
 
-/* Coordinate mapping - как в Arduino проекте */
-#define TOUCH_MAP_X1        480
-#define TOUCH_MAP_X2        0
-#define TOUCH_MAP_Y1        480
-#define TOUCH_MAP_Y2        0
-
+/* Координатное пространство (разрешение панели) */
 #define TOUCH_MAX_X         480
 #define TOUCH_MAX_Y         480
+
+/* Повороты, совместимые с Arduino Touch_GT911 */
+#define TOUCH_ROT_LEFT      0
+#define TOUCH_ROT_INVERTED  1
+#define TOUCH_ROT_RIGHT     2
+#define TOUCH_ROT_NORMAL    3
 
 /* Touch coordinates (updated by driver) */
 extern int16_t touch_last_x;
@@ -53,4 +54,23 @@ bool touch_touched(void);
  * @return true if released
  */
 bool touch_released(void);
+
+/**
+ * @brief Установить ориентацию экрана (как в Arduino Touch_GT911)
+ */
+void touch_set_rotation(uint8_t rot);
+
+/**
+ * @brief Обновить разрешение панели в контроллере (запись в конфиг GT911)
+ */
+bool touch_set_resolution(uint16_t width, uint16_t height);
+
+/**
+ * @brief Прочитать до 5 точек
+ * @param xs массив из 5 значений X
+ * @param ys массив из 5 значений Y
+ * @param count запишется количество точек
+ * @return true если есть валидные касания
+ */
+bool touch_read_points(int16_t *xs, int16_t *ys, uint8_t *count);
 

@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "display.c"
+idf_component_register(SRCS "ScrSmartTherminal.c" "touch.c" "main.c" "display.c"
                        INCLUDE_DIRS "."
                        REQUIRES lvgl esp_lcd esp_timer)
 

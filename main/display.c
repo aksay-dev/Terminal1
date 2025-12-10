@@ -167,7 +167,8 @@ static void st7701_init_sequence(void)
 #define VSYNC_FRONT_PORCH    10
 #define VSYNC_PULSE_WIDTH    8
 #define VSYNC_BACK_PORCH     20
-#define PCLK_HZ              (10 * 1000 * 1000)
+#define PCLK_HZ              (8 * 1000 * 1000)  /* Стабильно работает на 8 МГц */
+// #define PCLK_HZ              (16 * 1000 * 1000)  /* Попробовать 16 МГц после исправления clk_src */
 
 /* LVGL таймер период (мс) */
 #define LVGL_TICK_MS         5
@@ -232,7 +233,7 @@ void display_init(void)
         .bits_per_pixel = 16,
         .num_fbs = 0, /* не выделять внутренние фрейм-буферы */
         .bounce_buffer_size_px = 0, /* отключить bounce-буфер внутри драйвера */
-        .clk_src = LCD_CLK_SRC_DEFAULT,
+        .clk_src = LCD_CLK_SRC_PLL160M, /* Как в Arduino примере для стабильной работы на высоких частотах */
         .hsync_gpio_num = LCD_HSYNC_GPIO,
         .vsync_gpio_num = LCD_VSYNC_GPIO,
         .de_gpio_num = LCD_DE_GPIO,
