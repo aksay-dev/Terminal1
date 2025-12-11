@@ -9,6 +9,7 @@
 #include "font/lv_font.h"
 #include "lvgl.h"
 #include "display.h"
+#include "misc/lv_area.h"
 #include "touch.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -106,15 +107,22 @@ void app_main(void)
     /* Арка (круговой слайдер) */
     arc = lv_arc_create(scr);
     lv_obj_set_size(arc, 380, 380);
-    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 24);
     lv_arc_set_range(arc, 150, 300); /* 15.0 - 30.0 °C в десятых */
     lv_arc_set_value(arc, setpoint);
     lv_arc_set_bg_angles(arc, 135, 45);
     lv_arc_set_angles(arc, 135, 405);
-    lv_obj_set_style_arc_width(arc, 32, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(arc, 32, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(arc, 24, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(arc, 24, LV_PART_INDICATOR);
     lv_obj_set_style_arc_color(arc, lv_color_hex(0x1e293b), LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(0x1e293b), LV_PART_KNOB);
+
+    /* Кнопка (knob) тем же цветом, что и индикатор */
+    lv_obj_set_style_bg_color(arc, lv_color_hex(0x1e293b), LV_PART_KNOB);
+    lv_obj_set_style_bg_opa(arc, LV_OPA_COVER, LV_PART_KNOB);
+    lv_obj_set_style_arc_opa(arc, LV_OPA_TRANSP, LV_PART_KNOB);
+    lv_obj_set_style_border_width(arc, 3, LV_PART_KNOB);
+    lv_obj_set_style_border_color(arc, lv_color_hex(0xffffff), LV_PART_KNOB);
+
     lv_obj_set_style_arc_color(arc, lv_color_hex(0x4ade80), LV_PART_INDICATOR);
     lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR);
     lv_obj_add_event_cb(arc, arc_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
@@ -123,18 +131,18 @@ void app_main(void)
     label_set = lv_label_create(scr);
     lv_obj_set_style_text_font(label_set, &lv_font_montserrat_26, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_set, lv_color_hex(0xffffff), LV_PART_MAIN);
-    lv_obj_align(label_set, LV_ALIGN_CENTER, 0, -80);
+    lv_obj_align(label_set, LV_ALIGN_CENTER, 0, -4);
 
     label_room = lv_label_create(scr);
     lv_obj_set_style_text_font(label_room, &lv_font_montserrat_22, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_room, lv_color_hex(0x94a3b8), LV_PART_MAIN);
-    lv_obj_align(label_room, LV_ALIGN_CENTER, 0, -40);
+    lv_obj_align(label_room, LV_ALIGN_CENTER, 0, 36);
 
     /* Статус (нагрев/охлаждение/поддержание) */
     label_state = lv_label_create(scr);
     lv_obj_set_style_text_font(label_state, &lv_font_montserrat_20, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_state, lv_color_hex(0x4ade80), LV_PART_MAIN);
-    lv_obj_align(label_state, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_align(label_state, LV_ALIGN_BOTTOM_MID, 0, -60);
 
     /* Нижняя подпись */
     lv_obj_t *footer = lv_label_create(scr);
